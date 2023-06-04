@@ -1,0 +1,170 @@
+---
+title: "SGEMM GPU Kernel Performance Analysis"
+author: "mehreen"
+date: "2023-06-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Project Title
+Analyzing the Impact of Different Features on GPU Kernel Performance with Regression Analysis
+
+Project Description
+In this project, we aim to analyze the impact of different features on the performance of GPU kernels using the SGEMM GPU kernel performance dataset. The dataset contains information about various features such as matrix dimensions, floating-point precision, and GPU types. We will explore how these features influence GPU kernel performance and build a regression model to estimate the performance based on these features.
+
+#Data Preprocessing
+```{r 1}
+# Load required packages
+library(tidyverse)
+
+# Read the dataset
+data <- read_csv("sgemm_product.csv")
+
+# Subset the data
+clean_dataset <- data %>%
+  sample_n(1000)  # Change the number to specify the desired subset size
+
+
+# Print a summary of the dataset
+glimpse(clean_dataset)
+
+```
+#Exploratory Data Analysis (EDA)
+```{r}
+# Summary statistics
+summary_stats <- clean_dataset %>%
+  select(-starts_with("Run")) %>%
+  summary()
+
+# Distribution of Performance Times
+ggplot(clean_dataset, aes(x=`Run1 (ms)`)) +
+  geom_histogram(fill = "steelblue", bins = 30) +
+  labs(x = "Performance Time (ms)", y = "Frequency", title = "Distribution of Performance Times")
+
+# Correlation heatmap
+correlation_matrix <- cor(clean_dataset[, 1:14])
+correlation_df <- as.data.frame(as.table(correlation_matrix))
+colnames(correlation_df) <- c("Variable1", "Variable2", "Correlation")
+
+ggplot(correlation_df, aes(x = Variable1, y = Variable2, fill = Correlation)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+```{r}
+ggplot(clean_dataset, aes(x = MWG, y = `Run1 (ms)`)) +
+  geom_point()
+```
+
+
+#Feature Selection
+
+```{r}
+# Feature Importance using Random Forest
+library(randomForest)
+
+# Prepare the data
+features <- clean_dataset[, 1:14]
+target <- clean_dataset$`Run1 (ms)`
+
+# Train the random forest model
+rf_model <- randomForest(features, target)
+
+# Variable Importance Plot
+var_importance <- importance(rf_model)
+var_names <- rownames(var_importance)
+var_importance_df <- data.frame(Variable = var_names, Importance = var_importance[ ,1])
+
+ggplot(var_importance_df, aes(x = reorder(Variable, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "Variable", y = "Importance", title = "Variable Importance") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+```
+#Regression Model Building
+
+```{r}
+# Build a linear regression model
+lm_model <- lm(`Run1 (ms)` ~ ., data = clean_dataset)
+
+# Print the model summary
+summary(lm_model)
+
+```
+#Model Evaluation
+```{r}
+# Step 1: Split the data into training and testing sets
+set.seed(123)  # For reproducibility
+train_indices <- sample(1:nrow(data), 0.8 * nrow(data))  # 80% for training
+train_data <- data[train_indices, ]
+test_data <- data[-train_indices, ]
+
+# Step 2: Train the regression model on the training set
+model <- lm(`Run1 (ms)` ~ ., data = train_data)  # Replace `Run1 (ms)` with your target variable name
+
+# Step 3: Make predictions on the testing set
+predictions <- predict(model, newdata = test_data)
+
+# Step 4: Evaluate the model using regression metrics
+mse <- mean((test_data$`Run1 (ms)` - predictions)^2)
+rmse <- sqrt(mse)
+mae <- mean(abs(test_data$`Run1 (ms)` - predictions))
+rsquared <- summary(model)$r.squared
+
+cat("Mean Squared Error (MSE):", mse, "\n")
+cat("Root Mean Squared Error (RMSE):", rmse, "\n")
+cat("Mean Absolute Error (MAE):", mae, "\n")
+cat("R-squared (coefficient of determination):", rsquared, "\n")
+
+# Step 5: Visualize actual vs. predicted values
+library(ggplot2)
+
+# Create a data frame for plotting
+plot_data <- data.frame(Actual = test_data$`Run1 (ms)`, Predicted = predictions)
+
+# Create the scatter plot with colors
+ggplot(plot_data, aes(x = Actual, y = Predicted, color = ifelse(Predicted > Actual, "Overestimate", ifelse(Predicted < Actual, "Underestimate", "Exact Estimate")))) +
+  geom_point(size = 3, alpha = 0.7) +
+  xlab("Actual") +
+  ylab("Predicted") +
+  labs(title = "Actual vs. Predicted") +
+  scale_color_manual(values = c("Overestimate" = "#8B008B", "Underestimate" = "#000080", "Exact Estimate" = "#0000FF")) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 16, face = "bold"),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom")
+
+
+```
+
+# Conclusion
+The regression analysis was performed on a dataset consisting of 1,000 rows and 18 columns. The goal was to predict the GPU kernel performance (Run1 (ms)) based on various features such as MWG, NWG, KWG, MDIMC, NDIMC, MDIMA, NDIMB, KWI, VWM, VWN, STRM, STRN, SA, SB, and the performance of other runs (Run2 (ms), Run3 (ms), Run4 (ms)).
+
+Based on the evaluation metrics, the regression model performed exceptionally well. The Mean Squared Error (MSE) of 15.02912 indicates that, on average, the squared difference between the predicted and actual values is relatively small. The Root Mean Squared Error (RMSE) of 3.87674 further demonstrates the model's accuracy, as it represents the square root of the MSE and provides an interpretable metric in the same unit as the target variable.
+
+The Mean Absolute Error (MAE) of 1.428123 indicates that, on average, the absolute difference between the predicted and actual values is relatively low. This suggests that the model's predictions are close to the true values.
+
+The R-squared value (coefficient of determination) of 0.9998943 is close to 1, indicating that the independent variables explain almost all of the variance in the dependent variable. This high R-squared value suggests that the model fits the data very well.
+
+Overall, the regression model exhibits strong predictive performance, with low errors and a high degree of explained variance. These results indicate that the model can effectively capture the relationship between the independent variables and the dependent variable, providing accurate predictions. However, it is essential to assess the model's performance on additional datasets and consider potential limitations or biases in the data before drawing definitive conclusions.
+
+Among the features, several variables showed significant effects on the GPU kernel performance. These include KWI (with a negative coefficient), STRM, SA (both with positive coefficients), and the performance of other runs (Run2 (ms), Run3 (ms), Run4 (ms)). These features were found to have a statistically significant impact on the GPU kernel performance.
+
+The strengths of the regression model include its high level of accuracy, as indicated by the high R-squared value. The model's ability to explain a large portion of the variance in the dependent variable suggests that it captures the relationships between the features and the GPU kernel performance effectively.
+
+However, there are limitations to consider. First, the model assumes a linear relationship between the features and the dependent variable. If there are nonlinear relationships or interactions between the features, the model may not capture them adequately. Additionally, the model's performance may be affected by outliers or influential observations in the dataset. Robustness checks can be performed to identify and address these issues.
+
+To enhance the accuracy and robustness of the regression model, several approaches can be considered. First, feature engineering techniques can be applied to transform or combine existing features to better capture their relationships with the dependent variable. Additionally, regularization techniques such as ridge regression or lasso regression can be employed to handle multicollinearity or reduce the impact of irrelevant features.
+
+Furthermore, future research can explore additional analyses and research directions to further investigate the impact of features on GPU kernel performance. For example, an analysis of interaction effects between features can provide insights into how different combinations of features affect performance. Additionally, evaluating the model's performance on an independent test dataset can validate its predictive power and generalizability. Further analyses can also focus on identifying influential observations, outliers, or nonlinear relationships that may enhance the model's accuracy.
+
+In conclusion, the regression analysis identified significant features that impact GPU kernel performance. The model demonstrated high accuracy and goodness of fit, but there are opportunities to enhance its accuracy, robustness, and explore additional research directions to further investigate the relationships between features and performance.
+
+
+
