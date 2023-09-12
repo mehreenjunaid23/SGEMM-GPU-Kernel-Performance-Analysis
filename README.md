@@ -1,5 +1,3 @@
-# CS3072_Data_Science_final_project
-
 # SGEMM GPU Kernel Performance Analysis
 This repository contains the code and analysis for the project "SGEMM GPU Kernel Performance Analysis: Analyzing the Impact of Different Features on GPU Kernel Performance with Regression Analysis".
 
